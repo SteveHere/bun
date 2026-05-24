@@ -3284,14 +3284,6 @@ impl BlobExt for Blob {
                     let mut iter = jsc::JSArrayIterator::init(current, global)?;
                     stack.reserve(iter.len as usize);
 
-                    // Decide up front whether processing any part (or any entry
-                    // still pending on `stack`) can re-enter user JS (toString /
-                    // Symbol.toPrimitive / proxy traps / getters) and detach a
-                    // borrowed buffer before `joiner.done()` copies it out. If
-                    // nothing can, typed-array parts are borrowed (`push_static`)
-                    // instead of cloned, which would double peak memory for
-                    // `new Blob(largeChunks)`. Non-fast arrays are conservatively
-                    // treated as able to run user JS.
                     let mut parts_can_run_js = iter.fast.is_none() || !stack.is_empty();
                     if !parts_can_run_js {
                         let mut prescan = jsc::JSArrayIterator::init(current, global)?;
