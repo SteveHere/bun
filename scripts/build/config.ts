@@ -721,6 +721,12 @@ export function resolveConfig(partial: PartialConfig, toolchain: Toolchain): Con
   const clangMajor = majorOf(toolchain.clangVersion);
   const rustLlvmMajor = majorOf(toolchain.rustLlvmVersion);
   if (
+    // Never swap for windows targets: `ld` there is lld-link (COFF driver)
+    // and `findRustLld()` resolves the HOST-flavored gcc-ld/ld.lld, which
+    // can't stand in for it (cargo's msvc linker + nested cmake would both
+    // receive the wrong flavor). Windows builds don't use cross-language
+    // LTO anyway (no -lto WebKit prebuilt), so nothing is lost.
+    !windows &&
     crossLangLto &&
     toolchain.rustLld !== undefined &&
     clangMajor !== undefined &&
