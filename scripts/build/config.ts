@@ -700,10 +700,15 @@ export function resolveConfig(partial: PartialConfig, toolchain: Toolchain): Con
 
   // Cross-language LTO normally tracks `lto`. Gated off for aarch64-musl
   // where LLVM's `globalopt` pass segfaults on the `bun_runtime` bitcode
-  // module during the merged link (CI build #53109). Both halves still LTO
-  // independently when this is false — only the Rust↔C++ inlining is lost.
+  // module during the merged link (CI build #53109), and for Windows
+  // targets — the C++ side's `-flto` flags are unix-only, there's no -lto
+  // WebKit prebuilt for Windows, and the rust-lld swap below resolves the
+  // HOST-flavored ld.lld which can't stand in for lld-link (an explicit
+  // `--lto=on` would otherwise trip validateBunConfig's rust-lld check
+  // with a misleading error). Both halves still LTO independently when
+  // this is false — only the Rust↔C++ inlining is lost.
   // Tracked in workarounds.ts ("globalopt-crash-aarch64-musl").
-  const crossLangLto = lto && !(arm64 && abi === "musl");
+  const crossLangLto = lto && !windows && !(arm64 && abi === "musl");
 
   // Cross-language LTO bitcode-version skew: `-Clinker-plugin-lto` makes
   // rustc emit raw LLVM bitcode into libbun_rust.a. LLVM bitcode is
@@ -721,12 +726,6 @@ export function resolveConfig(partial: PartialConfig, toolchain: Toolchain): Con
   const clangMajor = majorOf(toolchain.clangVersion);
   const rustLlvmMajor = majorOf(toolchain.rustLlvmVersion);
   if (
-    // Never swap for windows targets: `ld` there is lld-link (COFF driver)
-    // and `findRustLld()` resolves the HOST-flavored gcc-ld/ld.lld, which
-    // can't stand in for it (cargo's msvc linker + nested cmake would both
-    // receive the wrong flavor). Windows builds don't use cross-language
-    // LTO anyway (no -lto WebKit prebuilt), so nothing is lost.
-    !windows &&
     crossLangLto &&
     toolchain.rustLld !== undefined &&
     clangMajor !== undefined &&
