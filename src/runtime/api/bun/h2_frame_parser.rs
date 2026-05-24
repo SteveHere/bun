@@ -2276,11 +2276,6 @@ impl H2FrameParser {
         let mut buffer = [0u8; FrameHeader::BYTE_SIZE + 8];
         let mut stream = FixedBufferStream::new(&mut buffer);
 
-        // RFC 9113 section 6.8: GOAWAY frames are always sent on stream 0. A
-        // GOAWAY with a non-zero stream identifier is itself a connection
-        // error of type PROTOCOL_ERROR. The stream that triggered the GOAWAY
-        // is only used for logging above; the last processed stream id goes in
-        // the payload below.
         let frame = FrameHeader {
             type_: FrameType::HTTP_FRAME_GOAWAY as u8,
             flags: 0,
@@ -3122,10 +3117,6 @@ impl H2FrameParser {
 
         let mut sensitive_headers: JSValue = JSValue::UNDEFINED;
 
-        // Stream-level limit violations seen mid-decode. The loop must consume
-        // the whole block regardless: the HPACK dynamic table is
-        // connection-scoped, so abandoning the block midway would desync it
-        // for every other stream. The rejection is applied once after the loop.
         let mut rejected = false;
 
         while offset < payload.len() {
@@ -3942,10 +3933,6 @@ impl H2FrameParser {
     /// Finalize a stream whose HEADERS frame carried END_STREAM, after the
     /// complete header block has been decoded and dispatched.
     fn finish_headers_end_stream(&self, stream: &mut Stream) {
-        // The stream can be reset (req.close(), AbortSignal) between the
-        // HEADERS fragment and the CONTINUATION that completes the block;
-        // don't regress a CLOSED stream or dispatch onStreamEnd after
-        // onStreamError.
         if stream.state == StreamState::CLOSED {
             return;
         }
@@ -4384,10 +4371,6 @@ impl H2FrameParser {
         if frame_type != FrameType::HTTP_FRAME_HEADERS as u8 || !self.is_server.get() {
             return None;
         }
-        // RFC 9113 §4.3: while a header block is mid-reassembly the only legal
-        // frame is a CONTINUATION for that stream, and dispatch_frame will
-        // reject this one. Don't allocate stream state, bump last_stream_id,
-        // or fire onStreamStart for a frame that is about to be rejected.
         if self.expecting_continuation.get() != 0 {
             return None;
         }
