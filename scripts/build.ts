@@ -390,6 +390,7 @@ function parseArgs(argv: string[]): CliArgs {
     "pgoGenerate",
     "pgoUse",
     "androidNdk",
+    "winsysroot",
   ]);
 
   for (let i = 0; i < argv.length; i++) {

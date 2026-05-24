@@ -176,6 +176,18 @@ export interface Config {
   // ─── Toolchain (resolved absolute paths) ───
   cc: string;
   cxx: string;
+  /**
+   * Compiler for build-time host tools (dep_host_cc codegen helpers).
+   * Same as `cc` except when cross-compiling for windows from a unix host,
+   * where `cc` is clang-cl (emits COFF) and host tools need plain clang.
+   */
+  hostCc: string;
+  /**
+   * C++ driver for host-side links (cargo's host-triple linker in
+   * `.cargo/config.toml` — build scripts, proc-macros). Same as `cxx`
+   * except when cross-compiling for windows from a unix host.
+   */
+  hostCxx: string;
   /** Parsed X.Y.Z from clang --version. Captured once at resolve time. */
   clangVersion: string | undefined;
   ar: string;
@@ -248,11 +260,21 @@ export interface Config {
 
   // ─── Cross-compilation (set when host != target for C++) ───
   // Generic so future targets (e.g. cross-compiling to macOS from Linux)
-  // go through the same plumbing. Currently populated only for Android.
+  // go through the same plumbing. Currently populated for Android, FreeBSD,
+  // and Windows (from a unix host).
   /** clang `--target=` triple, e.g. "aarch64-unknown-linux-android28". undefined = native. */
   crossTarget: string | undefined;
   /** clang `--sysroot=` path. For Android: `<ndk>/toolchains/llvm/prebuilt/<host>/sysroot`. */
   sysroot: string | undefined;
+  /**
+   * Windows cross-compile only: root of an xwin-style splat of the MSVC
+   * CRT/STL + Windows SDK laid out like a Visual Studio install
+   * (`VC/Tools/MSVC/<ver>`, `Windows Kits/10`). Passed to clang-cl as
+   * `/winsysroot` and to lld-link as `/winsysroot:` — the cross equivalent
+   * of the INCLUDE/LIB env a VS dev shell provides on a Windows host.
+   * undefined on native Windows builds (VS dev shell supplies the SDK).
+   */
+  winsysroot: string | undefined;
   /** Android NDK root. undefined when abi != "android". */
   androidNdk: string | undefined;
   /** Android API level (the N in `__ANDROID_API__=N`). undefined when abi != "android". */
@@ -314,6 +336,8 @@ export interface PartialConfig {
   freebsdSysroot?: string;
   /** FreeBSD release version (default: FREEBSD_VERSION_DEFAULT). Only used when os=freebsd. */
   freebsdVersion?: string;
+  /** Windows sysroot (xwin splat, VS layout). Only used when cross-compiling for os=windows. */
+  winsysroot?: string;
   // Version pins (defaults in versions.ts).
   nodejsVersion?: string;
   nodejsAbiVersion?: string;
@@ -327,6 +351,14 @@ export interface PartialConfig {
 export interface Toolchain {
   cc: string;
   cxx: string;
+  /**
+   * Host compiler / C++ driver for build-time host tools and host-side
+   * cargo links. Only set when they differ from `cc`/`cxx` (windows
+   * cross-compile from a unix host, where cc/cxx are clang-cl);
+   * resolveConfig() falls back to `cc`/`cxx` otherwise.
+   */
+  hostCc: string | undefined;
+  hostCxx: string | undefined;
   /**
    * Parsed clang --version (X.Y.Z). Captured during toolchain resolution
    * so downstream checks (workarounds.ts) don't re-spawn. undefined if
@@ -470,6 +502,22 @@ export function detectFreebsdSysroot(arch: Arch): string | undefined {
 }
 
 /**
+ * Locate a Windows sysroot (xwin splat of the MSVC CRT/STL + Windows SDK in
+ * Visual Studio layout). Checks the env var then well-known install paths.
+ * The splat contains both x64 and arm64 CRT/SDK libs, so unlike FreeBSD
+ * there's no per-arch variant. Returns undefined if none found.
+ */
+export function detectWindowsSysroot(): string | undefined {
+  const looksValid = (p: string) => existsSync(join(p, "Windows Kits", "10", "Include"));
+  const env = process.env.WINDOWS_SYSROOT;
+  if (env && looksValid(env)) return env;
+  for (const p of ["/opt/winsysroot", "/opt/xwin"]) {
+    if (looksValid(p)) return p;
+  }
+  return undefined;
+}
+
+/**
  * Locate the Android NDK. Checks the conventional env vars in priority
  * order, then a couple of well-known install paths. Returns undefined if
  * none found — caller decides whether to error.
@@ -581,11 +629,12 @@ export function resolveConfig(partial: PartialConfig, toolchain: Toolchain): Con
 
   // ─── Target platform ───
   const os = partial.os ?? host.os;
-  // Windows: process.arch can be wrong under emulation (x64 bun on arm64
-  // hardware). Ask the compiler what it targets — CMake does the same in
-  // project() to set CMAKE_SYSTEM_PROCESSOR. The found clang's default
-  // target is what we actually build for.
-  const compilerArch = os === "windows" ? clangTargetArch(toolchain.cc) : undefined;
+  // Windows hosts: process.arch can be wrong under emulation (x64 bun on
+  // arm64 hardware). Ask the compiler what it targets — CMake does the same
+  // in project() to set CMAKE_SYSTEM_PROCESSOR. The found clang's default
+  // target is what we actually build for. Cross-compiles from a unix host
+  // skip this (the host clang-cl's default arch is just the host's).
+  const compilerArch = os === "windows" && host.os === "windows" ? clangTargetArch(toolchain.cc) : undefined;
   const arch = partial.arch ?? compilerArch ?? host.arch;
   const abi: Abi | undefined = os === "linux" ? (partial.abi ?? detectLinuxAbi()) : undefined;
 
@@ -628,7 +677,10 @@ export function resolveConfig(partial: PartialConfig, toolchain: Toolchain): Con
   // shipping alongside the binary; UBSan likewise. Not worth the matrix.
   // FreeBSD: force off. Cross-compiled — we'd need to ship FreeBSD's
   // libclang_rt.asan, and there's no -asan WebKit prebuilt for it.
-  const asan = abi === "android" || freebsd ? false : (partial.asan ?? asanDefault);
+  // Windows cross: force off. The host clang doesn't ship the windows
+  // clang_rt.asan runtime libs, so the link would fail.
+  const asan =
+    abi === "android" || freebsd || (windows && host.os !== "windows") ? false : (partial.asan ?? asanDefault);
 
   // Assertions: default on in debug OR asan. ASAN coupling is ABI-critical:
   // the -asan WebKit prebuilt is built with ASSERT_ENABLED=1, which gates
@@ -710,7 +762,12 @@ export function resolveConfig(partial: PartialConfig, toolchain: Toolchain): Con
 
   // ─── Paths ───
   const cwd = findRepoRoot();
-  const defaultBuildDirName = computeBuildDirName({ debug, release, asan, assertions });
+  // Windows cross-compiles get their own default build dir — the native
+  // build of the same profile (build/debug, build/release) already holds
+  // host-target objects at the same obj/ paths, and mixing COFF into an ELF
+  // build dir (or vice versa) forces a full rebuild each time you switch.
+  const crossWindowsSuffix = windows && host.os !== "windows" ? `-windows-${arch}` : "";
+  const defaultBuildDirName = computeBuildDirName({ debug, release, asan, assertions }) + crossWindowsSuffix;
   const buildDir =
     partial.buildDir !== undefined
       ? isAbsolute(partial.buildDir)
@@ -810,6 +867,38 @@ export function resolveConfig(partial: PartialConfig, toolchain: Toolchain): Con
     }
   }
 
+  // ─── Cross-compilation (Windows) ───
+  // Same pattern as Android/FreeBSD, with the MSVC spin: the host LLVM's
+  // clang-cl/lld-link/llvm-lib/llvm-rc are used (tools.ts picks them by
+  // target), and the "sysroot" is an xwin splat of the MSVC CRT/STL +
+  // Windows SDK in Visual Studio layout, passed via /winsysroot instead of
+  // --sysroot. Building ON Windows needs none of this — the VS dev shell
+  // provides INCLUDE/LIB.
+  let winsysroot: string | undefined;
+  if (windows && host.os !== "windows") {
+    winsysroot =
+      partial.winsysroot !== undefined
+        ? isAbsolute(partial.winsysroot)
+          ? partial.winsysroot
+          : resolve(cwd, partial.winsysroot)
+        : detectWindowsSysroot();
+    if (winsysroot === undefined) {
+      throw new BuildError("--os=windows requires a Windows sysroot (MSVC CRT + Windows SDK) when cross-compiling", {
+        hint:
+          "Set WINDOWS_SYSROOT or pass --winsysroot=<path>. Create one with xwin (https://github.com/Jake-Shadle/xwin):\n" +
+          "  cargo install xwin  (or download a release binary)\n" +
+          "  xwin --accept-license --arch x86_64,aarch64 splat --use-winsysroot-style --preserve-ms-arch-notation --include-debug-libs --output /opt/winsysroot",
+      });
+    }
+    if (partial.webkit === "local") {
+      throw new BuildError("Cross-compiling for Windows requires the prebuilt WebKit (webkit=local needs msbuild)", {
+        hint: "Drop --webkit=local or build on a Windows host.",
+      });
+    }
+    const llvmArch = arch === "x64" ? "x86_64" : "aarch64";
+    crossTarget = `${llvmArch}-pc-windows-msvc`;
+  }
+
   // ─── Versioning ───
   const pkgJsonPath = resolve(cwd, "package.json");
   const pkgJson = JSON.parse(readFileSync(pkgJsonPath, "utf8")) as { version: string };
@@ -881,6 +970,8 @@ export function resolveConfig(partial: PartialConfig, toolchain: Toolchain): Con
     vendorDir,
     cc: toolchain.cc,
     cxx: toolchain.cxx,
+    hostCc: toolchain.hostCc ?? toolchain.cc,
+    hostCxx: toolchain.hostCxx ?? toolchain.cxx,
     clangVersion: toolchain.clangVersion,
     ar: toolchain.ar,
     ranlib: toolchain.ranlib,
@@ -907,6 +998,7 @@ export function resolveConfig(partial: PartialConfig, toolchain: Toolchain): Con
     osxSysroot,
     crossTarget,
     sysroot,
+    winsysroot,
     androidNdk,
     androidApiLevel,
     androidNdkRuntimeDir,
