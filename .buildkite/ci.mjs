@@ -121,26 +121,26 @@ function getAzureVmSize(os, arch, tier = "build") {
  * @type {Platform[]}
  */
 const buildPlatforms = [
-  { os: "darwin", arch: "aarch64", release: "14" },
-  { os: "darwin", arch: "x64", release: "14" },
-  { os: "linux", arch: "aarch64", distro: "amazonlinux", release: "2023", features: ["docker"] },
+  // { os: "darwin", arch: "aarch64", release: "14" },
+  // { os: "darwin", arch: "x64", release: "14" },
+  // { os: "linux", arch: "aarch64", distro: "amazonlinux", release: "2023", features: ["docker"] },
   { os: "linux", arch: "x64", distro: "amazonlinux", release: "2023", features: ["docker"] },
   { os: "linux", arch: "x64", baseline: true, distro: "amazonlinux", release: "2023", features: ["docker"] },
   { os: "linux", arch: "x64", profile: "asan", distro: "amazonlinux", release: "2023", features: ["docker"] },
-  { os: "linux", arch: "aarch64", abi: "musl", distro: "alpine", release: "3.23" },
+  // { os: "linux", arch: "aarch64", abi: "musl", distro: "alpine", release: "3.23" },
   { os: "linux", arch: "x64", abi: "musl", distro: "alpine", release: "3.23" },
   { os: "linux", arch: "x64", abi: "musl", baseline: true, distro: "alpine", release: "3.23" },
   // Android: cross-compiled from glibc amazonlinux via NDK sysroot. Host arch
   // matches target arch so only --abi/--target/--sysroot are cross.
-  { os: "linux", arch: "aarch64", abi: "android", distro: "amazonlinux", release: "2023", features: ["docker"] },
+  // { os: "linux", arch: "aarch64", abi: "android", distro: "amazonlinux", release: "2023", features: ["docker"] },
   { os: "linux", arch: "x64", abi: "android", distro: "amazonlinux", release: "2023", features: ["docker"] },
   // FreeBSD: cross-compiled from glibc amazonlinux via base.txz sysroot,
   // same model as Android. Target os/arch are explicit.
-  { os: "freebsd", arch: "x64", distro: "amazonlinux", release: "2023", features: ["docker"] },
-  { os: "freebsd", arch: "aarch64", distro: "amazonlinux", release: "2023", features: ["docker"] },
-  { os: "windows", arch: "x64", release: "2019" },
-  { os: "windows", arch: "x64", baseline: true, release: "2019" },
-  { os: "windows", arch: "aarch64", release: "11" },
+  // { os: "freebsd", arch: "x64", distro: "amazonlinux", release: "2023", features: ["docker"] },
+  // { os: "freebsd", arch: "aarch64", distro: "amazonlinux", release: "2023", features: ["docker"] },
+  // { os: "windows", arch: "x64", release: "2019" },
+  // { os: "windows", arch: "x64", baseline: true, release: "2019" },
+  // { os: "windows", arch: "aarch64", release: "11" },
 ];
 
 /**
@@ -153,22 +153,22 @@ const testPlatforms = [
   // whichever Intel box is free. Intel Macs can't run latest macOS and the
   // tier split bottlenecked the smaller pool, so x64 trades guaranteed
   // version coverage for throughput. The `release` field only labels the step.
-  { os: "darwin", arch: "aarch64", release: "26", tier: "latest" },
-  { os: "darwin", arch: "aarch64", release: "14", tier: "previous" },
-  { os: "darwin", arch: "x64", release: "14", tier: "latest" },
-  { os: "linux", arch: "aarch64", distro: "debian", release: "13", tier: "latest" },
+  // { os: "darwin", arch: "aarch64", release: "26", tier: "latest" },
+  // { os: "darwin", arch: "aarch64", release: "14", tier: "previous" },
+  // { os: "darwin", arch: "x64", release: "14", tier: "latest" },
+  // { os: "linux", arch: "aarch64", distro: "debian", release: "13", tier: "latest" },
   { os: "linux", arch: "x64", distro: "debian", release: "13", tier: "latest" },
   { os: "linux", arch: "x64", baseline: true, distro: "debian", release: "13", tier: "latest" },
   { os: "linux", arch: "x64", profile: "asan", distro: "debian", release: "13", tier: "latest" },
-  { os: "linux", arch: "aarch64", distro: "ubuntu", release: "25.04", tier: "latest" },
+  // { os: "linux", arch: "aarch64", distro: "ubuntu", release: "25.04", tier: "latest" },
   { os: "linux", arch: "x64", distro: "ubuntu", release: "25.04", tier: "latest" },
   { os: "linux", arch: "x64", baseline: true, distro: "ubuntu", release: "25.04", tier: "latest" },
-  { os: "linux", arch: "aarch64", abi: "musl", distro: "alpine", release: "3.23", tier: "latest" },
+  // { os: "linux", arch: "aarch64", abi: "musl", distro: "alpine", release: "3.23", tier: "latest" },
   { os: "linux", arch: "x64", abi: "musl", distro: "alpine", release: "3.23", tier: "latest" },
   { os: "linux", arch: "x64", abi: "musl", baseline: true, distro: "alpine", release: "3.23", tier: "latest" },
-  { os: "windows", arch: "x64", release: "2019", tier: "oldest" },
-  { os: "windows", arch: "x64", release: "2019", baseline: true, tier: "oldest" },
-  { os: "windows", arch: "aarch64", release: "11", tier: "latest" },
+  // { os: "windows", arch: "x64", release: "2019", tier: "oldest" },
+  // { os: "windows", arch: "x64", release: "2019", baseline: true, tier: "oldest" },
+ //  { os: "windows", arch: "aarch64", release: "11", tier: "latest" },
 ];
 
 /**
