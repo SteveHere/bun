@@ -133,7 +133,7 @@ const buildPlatforms = [
   // Android: cross-compiled from glibc amazonlinux via NDK sysroot. Host arch
   // matches target arch so only --abi/--target/--sysroot are cross.
   // { os: "linux", arch: "aarch64", abi: "android", distro: "amazonlinux", release: "2023", features: ["docker"] },
-  { os: "linux", arch: "x64", abi: "android", distro: "amazonlinux", release: "2023", features: ["docker"] },
+  // { os: "linux", arch: "x64", abi: "android", distro: "amazonlinux", release: "2023", features: ["docker"] },
   // FreeBSD: cross-compiled from glibc amazonlinux via base.txz sysroot,
   // same model as Android. Target os/arch are explicit.
   // { os: "freebsd", arch: "x64", distro: "amazonlinux", release: "2023", features: ["docker"] },
