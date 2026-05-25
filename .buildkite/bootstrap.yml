@@ -13,5 +13,4 @@ steps:
     agents:
       queue: "linux-small"
     command:
-      - "bash .buildkite/Dockerfile-bootstrap.sh"
       - "node .buildkite/ci.mjs"
